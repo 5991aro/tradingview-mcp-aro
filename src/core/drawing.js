@@ -3,7 +3,23 @@
  */
 import { evaluate, getChartApi } from '../connection.js';
 
-export async function drawShape({ shape, point, point2, overrides: overridesRaw, text }) {
+export async function drawShape({ shape, point, point2, overrides: overridesRaw, text, pane_index }) {
+  // Fix: activate the target pane before drawing so shapes land on the correct chart
+  if (pane_index !== undefined && pane_index !== null) {
+    await evaluate(`
+      (function() {
+        var cwc = window.TradingViewApi._chartWidgetCollection;
+        if (!cwc) return;
+        var all = cwc.getAll();
+        var idx = ${Number(pane_index)};
+        if (idx < 0 || idx >= all.length) return;
+        var mainDiv = all[idx]._mainDiv;
+        if (mainDiv) mainDiv.click();
+      })()
+    `);
+    await new Promise(r => setTimeout(r, 150));
+  }
+
   const overrides = overridesRaw ? (typeof overridesRaw === 'string' ? JSON.parse(overridesRaw) : overridesRaw) : {};
   const apiPath = await getChartApi();
   const overridesStr = JSON.stringify(overrides || {});
@@ -27,11 +43,11 @@ export async function drawShape({ shape, point, point2, overrides: overridesRaw,
     `);
   }
 
-  await new Promise(r => setTimeout(r, 200));
+  // Increased from 200ms: give TradingView time to register the new shape ID
+  await new Promise(r => setTimeout(r, 500));
   const after = await evaluate(`${apiPath}.getAllShapes().map(function(s) { return s.id; })`);
   const newId = (after || []).find(id => !(before || []).includes(id)) || null;
-  const result = { entity_id: newId };
-  return { success: true, shape, entity_id: result?.entity_id };
+  return { success: true, shape, entity_id: newId };
 }
 
 export async function listDrawings() {
@@ -76,24 +92,36 @@ export async function getProperties({ entity_id }) {
 }
 
 export async function removeOne({ entity_id }) {
-  const apiPath = await getChartApi();
-  const result = await evaluate(`
-    (function() {
-      var api = ${apiPath};
-      var eid = '${entity_id}';
-      var before = api.getAllShapes();
-      var found = false;
-      for (var i = 0; i < before.length; i++) { if (before[i].id === eid) { found = true; break; } }
-      if (!found) return { removed: false, error: 'Shape not found: ' + eid, available: before.map(function(s) { return s.id; }) };
-      api.removeEntity(eid);
-      var after = api.getAllShapes();
-      var stillExists = false;
-      for (var j = 0; j < after.length; j++) { if (after[j].id === eid) { stillExists = true; break; } }
-      return { removed: !stillExists, entity_id: eid, remaining_shapes: after.length };
-    })()
-  `);
-  if (result?.error) throw new Error(result.error);
-  return { success: true, entity_id: result?.entity_id, removed: result?.removed, remaining_shapes: result?.remaining_shapes };
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 300;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+
+    const apiPath = await getChartApi();
+    const result = await evaluate(`
+      (function() {
+        var api = ${apiPath};
+        var eid = '${entity_id}';
+        var before = api.getAllShapes();
+        var found = false;
+        for (var i = 0; i < before.length; i++) { if (before[i].id === eid) { found = true; break; } }
+        if (!found) return { removed: false, error: 'Shape not found: ' + eid, available: before.map(function(s) { return s.id; }) };
+        api.removeEntity(eid);
+        var after = api.getAllShapes();
+        var stillExists = false;
+        for (var j = 0; j < after.length; j++) { if (after[j].id === eid) { stillExists = true; break; } }
+        return { removed: !stillExists, entity_id: eid, remaining_shapes: after.length };
+      })()
+    `);
+
+    if (result?.error) {
+      if (attempt < MAX_RETRIES - 1) continue;
+      throw new Error(result.error);
+    }
+
+    return { success: true, entity_id: result?.entity_id, removed: result?.removed, remaining_shapes: result?.remaining_shapes };
+  }
 }
 
 export async function clearAll() {

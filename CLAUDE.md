@@ -64,8 +64,10 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 
 ### "Draw on the chart"
 - `draw_shape` → horizontal_line, trend_line, rectangle, text (pass point + optional point2)
+  - **Always pass `pane_index`** when working with multi-pane layouts (0 = top pane, 1 = second, etc.) — without it shapes land on whichever pane was last clicked in the UI
+  - Use `pane_list` first to confirm the index for your target symbol
 - `draw_list` → see what's drawn
-- `draw_remove_one` → remove by ID
+- `draw_remove_one` → remove by ID (retries up to 3× automatically; safe to call immediately after drawing)
 - `draw_clear` → remove all
 
 ### "Manage alerts"
@@ -119,6 +121,31 @@ These tools can return large payloads. Follow these rules to avoid context bloat
 - Screenshots save to `screenshots/` directory with timestamps
 - OHLCV capped at 500 bars, trades at 20 per request
 - Pine labels capped at 50 per study by default (pass `max_labels` to override)
+
+## Known Issues & Workarounds
+
+### Context menu closes before you can click items
+Right-clicking the chart opens a menu that closes before a second tool call can find it. **Never** use two separate calls (right-click then text-click). Instead, dispatch both events in a single `ui_evaluate` call:
+```js
+ui_evaluate({
+  expression: `(function() {
+    var canvas = document.querySelector('[data-name="pane-canvas"]');
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 800, clientY: 400 }));
+    setTimeout(function() {
+      var items = document.querySelectorAll('[role="menuitem"]');
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].textContent.trim() === 'Settings...') { items[i].click(); break; }
+      }
+    }, 80);
+  })()`
+})
+```
+
+### Indicator colors cannot be set via API
+`chart_manage_indicator` ignores color overrides and no `setStudyOverrides` method is exposed. Workaround: hardcode colors in the Pine Script source (`color=color.yellow`, `color=#FF0000`, etc.) before compiling.
+
+### Pine Editor opens in split-view (hides charts)
+`ui_open_panel("pine-editor")` may open the editor as a right-side split that hijacks a chart pane. The code now attempts to click the bottom toolbar tab first (which opens in the bottom strip), but if split-view still occurs, close the editor with `ui_open_panel("pine-editor", "close")` — the close function now tries `Alt+P` as a keyboard fallback if `hideWidget` fails.
 
 ## Architecture
 

@@ -9,8 +9,9 @@ export function registerDrawingTools(server) {
     point2: z.object({ time: z.coerce.number(), price: z.coerce.number() }).optional().describe('Second point for two-point shapes (trend_line, rectangle)'),
     overrides: z.string().optional().describe('JSON string of style overrides (e.g., \'{"linecolor": "#ff0000", "linewidth": 2}\')'),
     text: z.string().optional().describe('Text content for text shapes'),
-  }, async ({ shape, point, point2, overrides, text }) => {
-    try { return jsonResult(await core.drawShape({ shape, point, point2, overrides, text })); }
+    pane_index: z.coerce.number().int().min(0).optional().describe('Pane index (0-based) to draw on. When provided, activates that pane before drawing so the shape lands on the correct chart. Use pane_list to find the right index.'),
+  }, async ({ shape, point, point2, overrides, text, pane_index }) => {
+    try { return jsonResult(await core.drawShape({ shape, point, point2, overrides, text, pane_index })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 

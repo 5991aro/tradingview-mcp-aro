@@ -45,8 +45,22 @@ export async function openPanel({ panel, action }) {
         if (panel === 'strategy-tester') { var stratPanel = document.querySelector('[data-name="backtesting"]') || document.querySelector('[class*="strategyReport"]'); isOpen = isOpen && !!(stratPanel && stratPanel.offsetParent); }
         var performed = 'none';
         if (action === 'open' || (action === 'toggle' && !isOpen)) {
-          if (panel === 'pine-editor') { if (typeof bwb.activateScriptEditorTab === 'function') bwb.activateScriptEditorTab(); else if (typeof bwb.showWidget === 'function') bwb.showWidget(widgetName); }
-          else { if (typeof bwb.showWidget === 'function') bwb.showWidget(widgetName); }
+          if (panel === 'pine-editor') {
+            // Try clicking the Pine Script tab in the bottom toolbar first (opens in bottom strip, not split-view)
+            var tabClicked = false;
+            var tabCandidates = document.querySelectorAll('[class*="bottom"] [role="tab"], [class*="footer"] [role="tab"], [class*="widgetbar"] [role="tab"]');
+            for (var t = 0; t < tabCandidates.length; t++) {
+              if (tabCandidates[t].textContent.indexOf('Pine') !== -1 || tabCandidates[t].textContent.indexOf('Script') !== -1) {
+                tabCandidates[t].click(); tabClicked = true; break;
+              }
+            }
+            if (!tabClicked) {
+              if (typeof bwb.activateScriptEditorTab === 'function') bwb.activateScriptEditorTab();
+              else if (typeof bwb.showWidget === 'function') bwb.showWidget(widgetName);
+            }
+          } else {
+            if (typeof bwb.showWidget === 'function') bwb.showWidget(widgetName);
+          }
           performed = 'opened';
         } else if (action === 'close' || (action === 'toggle' && isOpen)) {
           if (typeof bwb.hideWidget === 'function') bwb.hideWidget(widgetName);
@@ -56,6 +70,20 @@ export async function openPanel({ panel, action }) {
       })()
     `);
     if (result && result.error) throw new Error(result.error);
+
+    // Keyboard fallback for pine-editor close: hideWidget() is unreliable
+    if (panel === 'pine-editor' && result?.performed === 'closed') {
+      await new Promise(r => setTimeout(r, 200));
+      const stillOpen = await evaluate(`
+        !!(document.querySelector('.monaco-editor.pine-editor-monaco') &&
+           (document.querySelector('[class*="layout__area--bottom"]') || {offsetHeight: 0}).offsetHeight > 50)
+      `);
+      if (stillOpen) {
+        await keyboard({ key: 'P', modifiers: ['alt'] });
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+
     return { success: true, panel, action, was_open: result?.was_open ?? false, performed: result?.performed ?? 'unknown' };
   } else {
     const selectorMap = {
