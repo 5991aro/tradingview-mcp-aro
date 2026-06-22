@@ -1,81 +1,91 @@
 /**
- * Core alert logic.
+ * Core alert logic — uses TradingView pricealerts REST API via synchronous XHR.
+ * text/plain Content-Type avoids CORS preflight while still sending JSON body.
  */
 import { evaluate, evaluateAsync, getClient } from '../connection.js';
 
-export async function create({ condition, price, message }) {
-  const opened = await evaluate(`
+const BASE = 'https://pricealerts.tradingview.com';
+
+// Map condition strings to TradingView API condition types
+const CONDITION_MAP = {
+  greater_than: 'cross_up',
+  less_than:    'cross_down',
+  crossing:     'cross',
+  cross_up:     'cross_up',
+  cross_down:   'cross_down',
+  cross:        'cross',
+};
+
+function xhrEval(path, bodyObj) {
+  return `
     (function() {
-      var btn = document.querySelector('[aria-label="Create Alert"]')
-        || document.querySelector('[data-name="alerts"]');
-      if (btn) { btn.click(); return true; }
-      return false;
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '${BASE}${path}', false);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('Content-Type', 'text/plain');
+      xhr.send(JSON.stringify(window._xhrPayload));
+      try { return JSON.parse(xhr.responseText); }
+      catch(e) { return { s: 'error', errmsg: 'parse error: ' + xhr.responseText.substring(0, 100) }; }
     })()
-  `);
+  `;
+}
 
-  if (!opened) {
-    const client = await getClient();
-    await client.Input.dispatchKeyEvent({ type: 'keyDown', modifiers: 1, key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65 });
-    await client.Input.dispatchKeyEvent({ type: 'keyUp', key: 'a', code: 'KeyA' });
-  }
-
-  await new Promise(r => setTimeout(r, 1000));
-
-  const priceSet = await evaluate(`
-    (function() {
-      var inputs = document.querySelectorAll('[class*="alert"] input[type="text"], [class*="alert"] input[type="number"]');
-      for (var i = 0; i < inputs.length; i++) {
-        var label = inputs[i].closest('[class*="row"]')?.querySelector('[class*="label"]');
-        if (label && /value|price/i.test(label.textContent)) {
-          var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          nativeSet.call(inputs[i], '${price}');
-          inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
-          inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
-        }
-      }
-      if (inputs.length > 0) {
-        var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-        nativeSet.call(inputs[0], '${price}');
-        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        return true;
-      }
-      return false;
-    })()
-  `);
-
-  if (message) {
-    await evaluate(`
+export async function create({ condition, price, message, symbol }) {
+  // Resolve active chart symbol if not provided
+  if (!symbol) {
+    const raw = await evaluate(`
       (function() {
-        var textarea = document.querySelector('[class*="alert"] textarea')
-          || document.querySelector('textarea[placeholder*="message"]');
-        if (textarea) {
-          var nativeSet = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-          nativeSet.call(textarea, ${JSON.stringify(message)});
-          textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        try { return window.TradingViewApi._activeChartWidgetWV.value().symbol(); } catch(e) {}
+        return null;
       })()
     `);
+    symbol = raw || null;
+    if (!symbol) return { success: false, error: 'Could not determine active chart symbol. Pass symbol explicitly.', source: 'rest_api' };
   }
 
-  await new Promise(r => setTimeout(r, 500));
-  const created = await evaluate(`
-    (function() {
-      var btns = document.querySelectorAll('button[data-name="submit"], button');
-      for (var i = 0; i < btns.length; i++) {
-        if (/^create$/i.test(btns[i].textContent.trim())) { btns[i].click(); return true; }
-      }
-      return false;
-    })()
-  `);
+  const tvCondition = CONDITION_MAP[condition] || 'cross';
+  const payload = {
+    conditions: [{
+      type: tvCondition,
+      frequency: 'on_first_fire',
+      series: [{ type: 'barset' }, { type: 'value', value: Number(price) }],
+      resolution: '1',
+    }],
+    symbol: `={"adjustment":"splits","currency-id":"USD","session":"extended","symbol":"${symbol}"}`,
+    resolution: '1',
+    message: message || `${symbol} ${condition} ${price}`,
+    sound_file: 'alert/soft/droplet',
+    sound_duration: 0,
+    popup: true,
+    auto_deactivate: false,
+    email: false,
+    sms_over_email: false,
+    mobile_push: true,
+    web_hook: null,
+    name: null,
+    expiration: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    active: true,
+    ignore_warnings: true,
+  };
 
-  return { success: !!created, price, condition, message: message || '(none)', price_set: !!priceSet, source: 'dom_fallback' };
+  await evaluate(`window._xhrPayload = { payload: ${JSON.stringify(payload)} }`);
+  const result = await evaluate(xhrEval('/create_alert'));
+
+  return {
+    success: result?.s === 'ok',
+    alert_id: result?.r?.alert_id || null,
+    price,
+    symbol,
+    condition: tvCondition,
+    message: payload.message,
+    error: result?.errmsg || null,
+    source: 'rest_api',
+  };
 }
 
 export async function list() {
-  // Use pricealerts REST API — returns structured data with alert_id, symbol, price, conditions
   const result = await evaluateAsync(`
-    fetch('https://pricealerts.tradingview.com/list_alerts', { credentials: 'include' })
+    fetch('${BASE}/list_alerts', { credentials: 'include' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.s !== 'ok' || !Array.isArray(data.r)) return { alerts: [], error: data.errmsg || 'Unexpected response' };
@@ -100,24 +110,28 @@ export async function list() {
       })
       .catch(function(e) { return { alerts: [], error: e.message }; })
   `);
-  return { success: true, alert_count: result?.alerts?.length || 0, source: 'internal_api', alerts: result?.alerts || [], error: result?.error };
+  return { success: true, alert_count: result?.alerts?.length || 0, source: 'rest_api', alerts: result?.alerts || [], error: result?.error };
+}
+
+export async function deleteById(alert_id) {
+  await evaluate(`window._xhrPayload = { payload: { alert_ids: [${alert_id}] } }`);
+  const result = await evaluate(xhrEval('/delete_alerts'));
+  return { success: result?.s === 'ok', alert_id, source: 'rest_api', error: result?.errmsg || null };
 }
 
 export async function deleteAlerts({ delete_all }) {
-  if (delete_all) {
-    const result = await evaluate(`
-      (function() {
-        var alertBtn = document.querySelector('[data-name="alerts"]');
-        if (alertBtn) alertBtn.click();
-        var header = document.querySelector('[data-name="alerts"]');
-        if (header) {
-          header.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }));
-          return { context_menu_opened: true };
-        }
-        return { context_menu_opened: false };
-      })()
-    `);
-    return { success: true, note: 'Alert deletion requires manual confirmation in the context menu.', context_menu_opened: result?.context_menu_opened || false, source: 'dom_fallback' };
-  }
-  throw new Error('Individual alert deletion not yet supported. Use delete_all: true.');
+  if (!delete_all) throw new Error('Use alert_id for single deletion, or delete_all: true to remove all.');
+
+  const listResult = await evaluateAsync(`
+    fetch('${BASE}/list_alerts', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { return (data.r || []).map(function(a) { return a.alert_id; }); })
+      .catch(function() { return []; })
+  `);
+  const ids = listResult || [];
+  if (!ids.length) return { success: true, deleted: 0, source: 'rest_api' };
+
+  await evaluate(`window._xhrPayload = { payload: { alert_ids: ${JSON.stringify(ids)} } }`);
+  const result = await evaluate(xhrEval('/delete_alerts'));
+  return { success: result?.s === 'ok', deleted: ids.length, source: 'rest_api', error: result?.errmsg || null };
 }
