@@ -113,7 +113,11 @@ export async function list({ symbol } = {}) {
   let alerts = result?.alerts || [];
   if (symbol) {
     const upper = symbol.toUpperCase();
-    alerts = alerts.filter(a => a.symbol && a.symbol.toUpperCase() === upper);
+    alerts = alerts.filter(a => {
+      if (!a.symbol) return false;
+      const sym = a.symbol.toUpperCase();
+      return sym === upper || sym.endsWith(':' + upper);
+    });
   }
   return { success: true, alert_count: alerts.length, source: 'rest_api', alerts, error: result?.error };
 }
