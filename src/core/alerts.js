@@ -83,7 +83,7 @@ export async function create({ condition, price, message, symbol }) {
   };
 }
 
-export async function list() {
+export async function list({ symbol } = {}) {
   const result = await evaluateAsync(`
     fetch('${BASE}/list_alerts', { credentials: 'include' })
       .then(function(r) { return r.json(); })
@@ -110,7 +110,12 @@ export async function list() {
       })
       .catch(function(e) { return { alerts: [], error: e.message }; })
   `);
-  return { success: true, alert_count: result?.alerts?.length || 0, source: 'rest_api', alerts: result?.alerts || [], error: result?.error };
+  let alerts = result?.alerts || [];
+  if (symbol) {
+    const upper = symbol.toUpperCase();
+    alerts = alerts.filter(a => a.symbol && a.symbol.toUpperCase() === upper);
+  }
+  return { success: true, alert_count: alerts.length, source: 'rest_api', alerts, error: result?.error };
 }
 
 export async function deleteById(alert_id) {

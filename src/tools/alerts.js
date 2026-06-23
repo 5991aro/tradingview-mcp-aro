@@ -7,13 +7,16 @@ export function registerAlertTools(server) {
     condition: z.string().describe('Alert condition (e.g., "crossing", "greater_than", "less_than")'),
     price: z.coerce.number().describe('Price level for the alert'),
     message: z.string().optional().describe('Alert message'),
-  }, async ({ condition, price, message }) => {
-    try { return jsonResult(await core.create({ condition, price, message })); }
+    symbol: z.string().optional().describe('Symbol to set the alert on (e.g., "NVDA"). Defaults to the active chart symbol.'),
+  }, async ({ condition, price, message, symbol }) => {
+    try { return jsonResult(await core.create({ condition, price, message, symbol })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('alert_list', 'List active alerts', {}, async () => {
-    try { return jsonResult(await core.list()); }
+  server.tool('alert_list', 'List active alerts, optionally filtered by symbol', {
+    symbol: z.string().optional().describe('Filter alerts by symbol (e.g., "NVDA"). Case-insensitive.'),
+  }, async ({ symbol } = {}) => {
+    try { return jsonResult(await core.list({ symbol })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
