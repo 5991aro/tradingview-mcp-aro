@@ -59,8 +59,21 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
   `;
 }
 
-export async function getOhlcv({ count, summary } = {}) {
-  const limit = Math.min(count || 100, MAX_OHLCV_BARS);
+function parseTimestamp(dateStr) {
+  if (!dateStr) return null;
+  if (/^\d+$/.test(String(dateStr))) return Number(dateStr);
+  const ms = new Date(dateStr).getTime();
+  if (isNaN(ms)) throw new Error(`Invalid date: ${dateStr}. Use ISO 8601 (e.g. "2026-06-24T13:45:00Z") or Unix seconds.`);
+  return Math.floor(ms / 1000);
+}
+
+export async function getOhlcv({ count, summary, from_date, to_date } = {}) {
+  const fromTs = parseTimestamp(from_date);
+  const toTs = parseTimestamp(to_date);
+
+  // When a time range is given, scan all available bars; otherwise limit to count
+  const limit = (fromTs || toTs) ? MAX_OHLCV_BARS : Math.min(count || 100, MAX_OHLCV_BARS);
+
   let data;
   try {
     data = await evaluate(`
@@ -69,10 +82,16 @@ export async function getOhlcv({ count, summary } = {}) {
         if (!bars || typeof bars.lastIndex !== 'function') return null;
         var result = [];
         var end = bars.lastIndex();
-        var start = Math.max(bars.firstIndex(), end - ${limit} + 1);
+        var start = ${fromTs || toTs} ? bars.firstIndex() : Math.max(bars.firstIndex(), end - ${limit} + 1);
+        var fromTs = ${fromTs || 'null'};
+        var toTs = ${toTs || 'null'};
         for (var i = start; i <= end; i++) {
           var v = bars.valueAt(i);
-          if (v) result.push({time: v[0], open: v[1], high: v[2], low: v[3], close: v[4], volume: v[5] || 0});
+          if (!v) continue;
+          if (fromTs !== null && v[0] < fromTs) continue;
+          if (toTs !== null && v[0] > toTs) continue;
+          result.push({time: v[0], open: v[1], high: v[2], low: v[3], close: v[4], volume: v[5] || 0});
+          if (!fromTs && !toTs && result.length >= ${limit}) break;
         }
         return {bars: result, total_bars: bars.size(), source: 'direct_bars'};
       })()
@@ -80,7 +99,8 @@ export async function getOhlcv({ count, summary } = {}) {
   } catch { data = null; }
 
   if (!data || !data.bars || data.bars.length === 0) {
-    throw new Error('Could not extract OHLCV data. The chart may still be loading.');
+    const hint = (fromTs || toTs) ? ' Tip: bar timestamps are Unix UTC seconds — verify the range covers loaded chart data.' : '';
+    throw new Error('Could not extract OHLCV data. The chart may still be loading.' + hint);
   }
 
   if (summary) {

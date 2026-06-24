@@ -15,8 +15,20 @@ export async function start({ date } = {}) {
   await evaluate(`${rp}.showReplayToolbar()`);
   await new Promise(r => setTimeout(r, 500));
 
-  if (date) await evaluate(`${rp}.selectDate(new Date('${date}'))`);
-  else await evaluate(`${rp}.selectFirstAvailableDate()`);
+  // Parse target timestamp (Unix seconds) from the date string
+  let targetTs = null;
+  let dateForSelect = date;
+  if (date) {
+    const ms = new Date(date).getTime();
+    if (!isNaN(ms)) {
+      targetTs = Math.floor(ms / 1000);
+      // selectDate only uses the date part — strip time so it jumps to start of that day
+      dateForSelect = date.split('T')[0];
+    }
+    await evaluate(`${rp}.selectDate(new Date('${dateForSelect}'))`);
+  } else {
+    await evaluate(`${rp}.selectFirstAvailableDate()`);
+  }
   await new Promise(r => setTimeout(r, 1000));
 
   // Check for "Data point unavailable" toast which corrupts the chart
@@ -32,15 +44,33 @@ export async function start({ date } = {}) {
   `);
 
   if (toast) {
-    // Stop replay to recover chart
     try { await evaluate(`${rp}.stopReplay()`); } catch {}
     try { await evaluate(`${rp}.hideReplayToolbar()`); } catch {}
     throw new Error(`Replay date unavailable: "${toast}". The requested date has no data for this timeframe. Try a more recent date or switch to a higher timeframe (e.g., Daily).`);
   }
 
+  // If a specific time was requested, step forward bar-by-bar until we reach it
+  let stepsAdvanced = 0;
+  if (targetTs) {
+    const MAX_STEPS = 1000;
+    for (let i = 0; i < MAX_STEPS; i++) {
+      const currentDate = await evaluate(wv(`${rp}.currentDate()`));
+      if (currentDate >= targetTs) break;
+      await evaluate(`${rp}.doStep()`);
+      stepsAdvanced++;
+      if (stepsAdvanced % 50 === 0) await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
   const started = await evaluate(wv(`${rp}.isReplayStarted()`));
   const currentDate = await evaluate(wv(`${rp}.currentDate()`));
-  return { success: true, replay_started: !!started, date: date || '(first available)', current_date: currentDate };
+  return {
+    success: true,
+    replay_started: !!started,
+    date: date || '(first available)',
+    current_date: currentDate,
+    steps_advanced: stepsAdvanced,
+  };
 }
 
 export async function step() {

@@ -35,9 +35,12 @@ export function registerPineTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('pine_smart_compile', 'Intelligent compile: detects button, compiles, checks errors, reports study changes', {}, async () => {
-    try { return jsonResult(await core.smartCompile()); }
-    catch (err) { return jsonResult({ success: false, error: err.message }, true); }
+  server.tool('pine_smart_compile', '⚠️ DEPRECATED — use pine_set_source + ui_keyboard(Ctrl+S) instead. This function clicks "Save" internally which reloads the last server-saved version, destroying any changes made via pine_set_source.', {}, async () => {
+    return jsonResult({
+      success: false,
+      deprecated: true,
+      warning: 'pine_smart_compile is unsafe: it triggers an internal Save that reloads the old server version, overwriting any pine_set_source changes. Use this sequence instead: pine_set_source → ui_keyboard(key="s", modifiers=["ctrl"]) → pine_get_errors.',
+    });
   });
 
   server.tool('pine_new', 'Create a new blank Pine Script', {

@@ -3,11 +3,13 @@ import { jsonResult } from './_format.js';
 import * as core from '../core/data.js';
 
 export function registerDataTools(server) {
-  server.tool('data_get_ohlcv', 'Get OHLCV bar data from the chart. Use summary=true for compact stats instead of all bars (saves context).', {
-    count: z.coerce.number().optional().describe('Number of bars to retrieve (max 500, default 100)'),
+  server.tool('data_get_ohlcv', 'Get OHLCV bar data from the chart. Use summary=true for compact stats instead of all bars (saves context). Use from_date/to_date (ISO 8601 or Unix seconds) to filter by time range.', {
+    count: z.coerce.number().optional().describe('Number of bars to retrieve (max 500, default 100). Ignored when from_date/to_date are set.'),
     summary: z.coerce.boolean().optional().describe('Return summary stats (high, low, open, close, avg volume, range) instead of all bars — much smaller output'),
-  }, async ({ count, summary }) => {
-    try { return jsonResult(await core.getOhlcv({ count, summary })); }
+    from_date: z.string().optional().describe('Start of time range (ISO 8601 string or Unix timestamp in seconds). Filters bars to those at or after this time.'),
+    to_date: z.string().optional().describe('End of time range (ISO 8601 string or Unix timestamp in seconds). Filters bars to those at or before this time.'),
+  }, async ({ count, summary, from_date, to_date }) => {
+    try { return jsonResult(await core.getOhlcv({ count, summary, from_date, to_date })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
