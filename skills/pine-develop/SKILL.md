@@ -61,6 +61,9 @@ Two equivalent paths — pick one, don't mix them mid-loop:
 **A) MCP tools (exact sequence, no substitutions):**
 1. `pine_open(name=...)` — open the script. Sporadically fails on the 1st attempt
    ("Could not open Pine Editor") → retry the same call once; the 2nd attempt reliably works.
+   Check the result's `method` field: `ui_open`/`already_open` = the backing script truly
+   switched, safe to save. `facade_fallback` = source was only injected into the currently
+   open script — a save would overwrite that script; verify the editor title before saving.
 2. `pine_set_source` — inject the code.
 3. `pine_save` — save (Ctrl+S). **Saving alone does NOT update the on-chart instance.**
 4. `pine_compile` — compile + apply to chart (Ctrl+Enter). **Mandatory after every code
