@@ -2,8 +2,9 @@
 
 Full review of `src/` (~4,700 lines) and tests, performed with Claude Code (Fable 5).
 Scope: (1) core CDP plumbing, (2) trap-prone tools (pine/replay/alerts), (3) everything else.
-Tests at review time: **16/17 pass** (only `e2e.test.js` fails — it requires a live TradingView
-with CDP on :9222 and hard-fails instead of skipping; see Open #12).
+Tests at review time: **16/17 pass** (only `e2e.test.js` failed — required a live TradingView
+with CDP on :9222 and hard-failed instead of skipping; fixed same day, `npm test` is now green
+offline with the e2e suite skipping cleanly).
 
 Overall verdict: codebase in good shape — consistent error handling, defensive DOM scripting,
 sensible fallback chains. Findings below, numbered as referenced in code comments.
@@ -31,10 +32,15 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 | 8 | `src/core/morning.js` | `assertSafeRulesPath` used hardcoded `"/"` — never matches Windows backslash paths, so custom `rules_path` was always rejected on Windows | Uses `path.sep` |
 | 1-doc | `src/tools/pine.js` | — | `pine_open` description now warns it injects source without switching the editor's backing script (overwrite risk on save) |
 | 6-doc | `src/tools/tab.js`, `src/core/tab.js` | — | `tab_switch` description/comment now state it's visual-only; CDP client stays on the old target |
+| O6 | `src/core/data.js`, `src/core/batch.js` | `study_filter`/`entity_id`/`symbol`/`tf` interpolated unescaped into evaluated JS — a quote in the value broke the call | All interpolations `JSON.stringify`-escaped |
+| O8 | `src/connection.js` | No concurrency guard — overlapping `getClient()` calls could open and leak parallel CDP connections | Shared in-flight promise added |
+| O11 | `src/core/index.js` | Public API missing `pane`, `tab`, `morning`, `stream` exports | Added |
+| O12 | `tests/e2e.test.js` | Hard-failed (`process.exit(1)`) without live TradingView, breaking `npm test` offline | Probes CDP up front, skips suite with actionable message — `npm test` now green offline |
 
 ## OPEN — for a future session
 
 Ordered by value. Items needing a **live TradingView (CDP)** to verify are marked ⚡.
+(Numbering preserved from the original review; items 6, 8, 11, 12 were fixed same day — see O-rows above.)
 
 1. ⚡ **`pine_open` doesn't switch the editor's backing script** (`src/core/pine.js` `openScript`).
    It fetches the saved source via pine-facade and `setValue()`s it into the currently open
@@ -52,24 +58,15 @@ Ordered by value. Items needing a **live TradingView (CDP)** to verify are marke
 5. **English-only button matching** in `src/core/pine.js` `compile()`/`save()` (regexes like
    `/save and add to chart/i`, `text === 'Save'`). Falls through to weaker fallbacks on non-English
    TradingView UI. Add localized alternatives or prefer `data-name`/class-based selectors.
-6. **JS-injection robustness in `src/core/data.js`**: `buildGraphicsJS` interpolates
-   `study_filter` into a single-quoted JS string unescaped; same for `entity_id` (`getIndicator`)
-   and `symbol` (`getQuote`). A quote/backslash in the value breaks `evaluate()`. Use
-   `JSON.stringify` interpolation like the newer code does.
 7. **2-decimal rounding** in `data.js` pine lines/labels/boxes (`Math.round(v*100)/100`) loses
    precision on forex/crypto (e.g. EURUSD 1.08543 → 1.09). Round adaptively (use the symbol's
    `pricescale`/`minmov` from `symbolExt()`), or return raw with a formatted twin.
-8. **No concurrency guard** in `src/connection.js` `getClient()`/`connect()` — two overlapping
-   calls can open two CDP connections and leak one. Add a shared in-flight promise.
 9. **`tv_launch` can't work with MSIX TradingView on Windows** (`src/core/health.js`): searches
    only classic `.exe` paths; also `taskkill /F /IM TradingView.exe` by default. Error message
    should mention the browser-CDP alternative (e.g. Brave with `--remote-debugging-port=9222`,
    which is how this machine runs it — desktop shortcut "TradingView (CDP)").
 10. **`wait.js` bar-count heuristic** counts `[class*="bar"]` (matches toolbar/sidebar too).
     Works as a change-detector, but rename/tighten if touched.
-11. **`src/core/index.js`** public API is missing `pane`, `tab`, `morning`, `stream` exports.
-12. **`tests/e2e.test.js` hard-fails without live TradingView.** Should detect CDP absence and
-    `t.skip()` so `npm test` is green offline.
 13. **`replay_start` time-seek** (`src/core/replay.js`): up to 1000 `doStep()` round-trips with no
     `target_reached` flag in the result. Add the flag; consider a coarser seek.
 14. **Minor cosmetics:** `xhrEval(path, bodyObj)` has an unused param; `window._xhrPayload`

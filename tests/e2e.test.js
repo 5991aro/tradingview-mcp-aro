@@ -61,25 +61,28 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('TradingView MCP — Full E2E (70 tools)', () => {
+// Probe CDP availability up front so the suite SKIPS cleanly when TradingView
+// isn't running (instead of hard-failing the whole npm test run offline).
+async function findChartTarget() {
+  try {
+    const targets = await CDP.List({ host: 'localhost', port: 9222 });
+    return targets.find(t => t.url && t.url.includes('tradingview.com/chart')) || null;
+  } catch { return null; }
+}
+const CHART_TARGET = await findChartTarget();
+
+describe('TradingView MCP — Full E2E (70 tools)', {
+  skip: CHART_TARGET ? false : 'TradingView with CDP on :9222 not running — start it via the "TradingView (CDP)" shortcut to run the e2e suite',
+}, () => {
 
   before(async () => {
-    try {
-      const targets = await CDP.List({ host: 'localhost', port: 9222 });
-      const chartTarget = targets.find(t => t.url && t.url.includes('tradingview.com/chart'));
-      if (!chartTarget) throw new Error('No TradingView chart target found');
-
-      client = await CDP({ host: 'localhost', port: 9222, target: chartTarget.id });
-      await client.Runtime.enable();
-      await client.Page.enable();
-      await client.DOM.enable();
-      Runtime = client.Runtime;
-      Input = client.Input;
-      Page = client.Page;
-    } catch (err) {
-      console.error('Cannot connect to TradingView. Make sure it is running with --remote-debugging-port=9222');
-      process.exit(1);
-    }
+    client = await CDP({ host: 'localhost', port: 9222, target: CHART_TARGET.id });
+    await client.Runtime.enable();
+    await client.Page.enable();
+    await client.DOM.enable();
+    Runtime = client.Runtime;
+    Input = client.Input;
+    Page = client.Page;
   });
 
   after(async () => {

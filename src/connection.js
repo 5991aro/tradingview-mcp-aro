@@ -42,7 +42,17 @@ export async function getClient() {
   return connect();
 }
 
+// Shared in-flight promise: two overlapping getClient() calls must not each
+// open a CDP connection (one would leak and possibly bind a different target).
+let connecting = null;
+
 export async function connect() {
+  if (connecting) return connecting;
+  connecting = doConnect().finally(() => { connecting = null; });
+  return connecting;
+}
+
+async function doConnect() {
   let lastError;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {

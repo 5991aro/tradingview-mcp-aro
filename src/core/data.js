@@ -15,7 +15,7 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
       var model = chart.model();
       var sources = model.model().dataSources();
       var results = [];
-      var filter = '${filter}';
+      var filter = ${JSON.stringify(String(filter))};
       for (var si = 0; si < sources.length; si++) {
         var s = sources[si];
         if (!s.metaInfo) continue;
@@ -127,11 +127,13 @@ export async function getOhlcv({ count, summary, from_date, to_date } = {}) {
 }
 
 export async function getIndicator({ entity_id }) {
+  const eid = JSON.stringify(String(entity_id));
   const data = await evaluate(`
     (function() {
       var api = ${CHART_API};
-      var study = api.getStudyById('${entity_id}');
-      if (!study) return { error: 'Study not found: ${entity_id}' };
+      var eid = ${eid};
+      var study = api.getStudyById(eid);
+      if (!study) return { error: 'Study not found: ' + eid };
       var result = { name: null, inputs: null, visible: null };
       try { result.visible = study.isVisible(); } catch(e) {}
       try { result.inputs = study.getInputValues(); } catch(e) { result.inputs_error = e.message; }
@@ -266,7 +268,7 @@ export async function getQuote({ symbol } = {}) {
   const data = await evaluate(`
     (function() {
       var api = ${CHART_API};
-      var sym = '${symbol || ''}';
+      var sym = ${JSON.stringify(String(symbol || ''))};
       if (!sym) { try { sym = api.symbol(); } catch(e) {} }
       if (!sym) { try { sym = api.symbolExt().symbol; } catch(e) {} }
       var ext = {};
