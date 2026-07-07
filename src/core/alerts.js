@@ -7,14 +7,12 @@ import { evaluate, evaluateAsync, getClient } from '../connection.js';
 const BASE = 'https://pricealerts.tradingview.com';
 
 // Map condition strings to TradingView API condition types.
-// NOTE: greater_than/less_than map to CROSSING conditions — the alert only fires
-// when price crosses the level, not while it is already beyond it. An alert set
-// with greater_than while price is already above the level will NOT fire until
-// price dips below and crosses up again. (True static greater/less conditions
-// have not been verified against the pricealerts API yet — see CODE_REVIEW doc.)
+// 'greater'/'less' are true static conditions — verified live 2026-07-07: an alert
+// created with type 'greater' at a level price was already above fired within
+// 2 seconds. The cross_* types only fire when price crosses the level.
 const CONDITION_MAP = {
-  greater_than: 'cross_up',
-  less_than:    'cross_down',
+  greater_than: 'greater',
+  less_than:    'less',
   crossing:     'cross',
   cross_up:     'cross_up',
   cross_down:   'cross_down',
@@ -36,17 +34,34 @@ function xhrEval(path, bodyObj) {
 }
 
 export async function create({ condition, price, message, symbol }) {
-  // Resolve active chart symbol if not provided
+  // Read active chart context: symbol, resolution, currency, session.
+  // symbolInfo() lives on chartModel().mainSeries() (not on the chart facade).
+  const ctx = await evaluate(`
+    (function() {
+      try {
+        var chart = window.TradingViewApi._activeChartWidgetWV.value();
+        var out = { symbol: chart.symbol() };
+        try { out.resolution = chart.resolution(); } catch(e) {}
+        try {
+          var si = chart.chartModel().mainSeries().symbolInfo();
+          if (si) { out.currency = si.currency_code; out.session = si.subsession_id; }
+        } catch(e) {}
+        return out;
+      } catch(e) { return null; }
+    })()
+  `);
+
   if (!symbol) {
-    const raw = await evaluate(`
-      (function() {
-        try { return window.TradingViewApi._activeChartWidgetWV.value().symbol(); } catch(e) {}
-        return null;
-      })()
-    `);
-    symbol = raw || null;
+    symbol = ctx?.symbol || null;
     if (!symbol) return { success: false, error: 'Could not determine active chart symbol. Pass symbol explicitly.', source: 'rest_api' };
   }
+
+  // Chart-derived currency/session/resolution only apply when the alert targets the
+  // chart's own symbol; for an explicit different symbol fall back to safe defaults.
+  const onChartSymbol = !ctx?.symbol || symbol === ctx.symbol || ctx.symbol.endsWith(':' + symbol);
+  const currency = (onChartSymbol && ctx?.currency) || 'USD';
+  const session = (onChartSymbol && ctx?.session) || 'extended';
+  const resolution = (onChartSymbol && ctx?.resolution) || '1';
 
   const tvCondition = CONDITION_MAP[condition] || 'cross';
   const payload = {
@@ -54,10 +69,10 @@ export async function create({ condition, price, message, symbol }) {
       type: tvCondition,
       frequency: 'on_first_fire',
       series: [{ type: 'barset' }, { type: 'value', value: Number(price) }],
-      resolution: '1',
+      resolution,
     }],
-    symbol: `={"adjustment":"splits","currency-id":"USD","session":"extended","symbol":"${symbol}"}`,
-    resolution: '1',
+    symbol: `={"adjustment":"splits","currency-id":${JSON.stringify(currency)},"session":${JSON.stringify(session)},"symbol":${JSON.stringify(symbol)}}`,
+    resolution,
     message: message || `${symbol} ${condition} ${price}`,
     sound_file: 'alert/soft/droplet',
     sound_duration: 0,
@@ -82,12 +97,12 @@ export async function create({ condition, price, message, symbol }) {
     price,
     symbol,
     condition: tvCondition,
+    resolution,
+    currency,
+    session,
     message: payload.message,
     error: result?.errmsg || null,
     source: 'rest_api',
-    note: (condition === 'greater_than' || condition === 'less_than')
-      ? `"${condition}" is implemented as a CROSSING condition (${tvCondition}): it fires when price crosses ${price}, not while price is already beyond it.`
-      : undefined,
   };
 }
 

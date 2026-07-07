@@ -40,6 +40,7 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 | O11 | `src/core/index.js` | Public API missing `pane`, `tab`, `morning`, `stream` exports | Added |
 | O12 | `tests/e2e.test.js` | Hard-failed (`process.exit(1)`) without live TradingView, breaking `npm test` offline | Probes CDP up front, skips suite with actionable message — `npm test` now green offline |
 | O4 | `src/connection.js`, `src/core/tab.js`, `src/tools/tab.js` | `tab_switch` was visual-only — cached CDP client stayed bound to the old tab | New `connectTo(targetId)` rebinds the client after activation; result includes `reconnected` + `active_symbol` as proof. Live-verified 2026-07-07 (read `BATS:MU` through the new connection) |
+| O2b/O3 | `src/core/alerts.js`, `src/tools/alerts.js` | `greater_than`/`less_than` silently mapped to crossing conditions; payload hardcoded USD/1-min/extended | `greater`/`less` are true static API condition types (live-verified: static alert fires immediately when price already beyond level); currency/session/resolution now read from the active chart when the alert targets its symbol (safe defaults otherwise). End-to-end re-verified via create+delete of a test alert |
 | O1 | `src/core/pine.js`, `src/tools/pine.js` | `pine_open` only injected source into the currently open script — a later save could overwrite a different script | `openScript` now drives TradingView's own "Open script…" dialog (script-title menu → Open script… → **trusted CDP double-click** on the row; synthetic JS clicks are ignored). Verifies the title switched; falls back to legacy facade injection with an explicit `warning` + `method: "facade_fallback"`. Live-verified 2026-07-07 both directions (9 EMA Reclaim Scalp ↔ RVOL and ATR) plus `already_open` path. Discovery notes: Pine editor here runs as a floating `pine-dialog` (position:fixed → `offsetParent` visibility checks give false negatives); open-dialog rows need trusted CDP mouse input |
 
 ## OPEN — for a future session
@@ -47,11 +48,6 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 Ordered by value. Items needing a **live TradingView (CDP)** to verify are marked ⚡.
 (Numbering preserved from the original review; items 6, 8, 11, 12 were fixed same day — see O-rows above.)
 
-2. ⚡ **(2b) True greater/less alert conditions.** Probe the pricealerts REST API for static
-   threshold condition types; if they exist, map `greater_than`/`less_than` to them properly.
-3. ⚡ **`alert_create` hardcodes `currency-id: "USD"`, `resolution: '1'`, `session: "extended"`**
-   (`src/core/alerts.js`). Verify behavior on EUR instruments (DAX) and derive currency/session
-   from the active chart's `symbolExt()` instead.
 5. **English-only button matching** in `src/core/pine.js` `compile()`/`save()` (regexes like
    `/save and add to chart/i`, `text === 'Save'`). Falls through to weaker fallbacks on non-English
    TradingView UI. Add localized alternatives or prefer `data-name`/class-based selectors.
