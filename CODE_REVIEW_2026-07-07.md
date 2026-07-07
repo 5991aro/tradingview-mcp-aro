@@ -36,6 +36,7 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 | O8 | `src/connection.js` | No concurrency guard — overlapping `getClient()` calls could open and leak parallel CDP connections | Shared in-flight promise added |
 | O11 | `src/core/index.js` | Public API missing `pane`, `tab`, `morning`, `stream` exports | Added |
 | O12 | `tests/e2e.test.js` | Hard-failed (`process.exit(1)`) without live TradingView, breaking `npm test` offline | Probes CDP up front, skips suite with actionable message — `npm test` now green offline |
+| O4 | `src/connection.js`, `src/core/tab.js`, `src/tools/tab.js` | `tab_switch` was visual-only — cached CDP client stayed bound to the old tab | New `connectTo(targetId)` rebinds the client after activation; result includes `reconnected` + `active_symbol` as proof. Live-verified 2026-07-07 (read `BATS:MU` through the new connection) |
 
 ## OPEN — for a future session
 
@@ -52,9 +53,6 @@ Ordered by value. Items needing a **live TradingView (CDP)** to verify are marke
 3. ⚡ **`alert_create` hardcodes `currency-id: "USD"`, `resolution: '1'`, `session: "extended"`**
    (`src/core/alerts.js`). Verify behavior on EUR instruments (DAX) and derive currency/session
    from the active chart's `symbolExt()` instead.
-4. ⚡ **`tab_switch` should reconnect** (`src/core/tab.js`): after `/json/activate/<id>`, call
-   `disconnect()` and reconnect the CDP client to the activated target id; `findChartTarget`
-   currently just picks the first `/chart/` target.
 5. **English-only button matching** in `src/core/pine.js` `compile()`/`save()` (regexes like
    `/save and add to chart/i`, `text === 'Save'`). Falls through to weaker fallbacks on non-English
    TradingView UI. Add localized alternatives or prefer `data-name`/class-based selectors.

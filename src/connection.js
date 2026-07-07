@@ -117,6 +117,25 @@ export async function evaluateAsync(expression) {
   return evaluate(expression, { awaitPromise: true });
 }
 
+/**
+ * Connect to a SPECIFIC CDP target by id (used by tab_switch so subsequent
+ * evaluate() calls hit the newly activated tab, not the previously cached one).
+ * Drops any existing connection first.
+ */
+export async function connectTo(targetId) {
+  await disconnect();
+  const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/list`);
+  const targets = await resp.json();
+  const target = targets.find(t => t.id === targetId);
+  if (!target) throw new Error(`CDP target ${targetId} not found`);
+  targetInfo = target;
+  client = await CDP({ host: CDP_HOST, port: CDP_PORT, target: target.id });
+  await client.Runtime.enable();
+  await client.Page.enable();
+  await client.DOM.enable();
+  return client;
+}
+
 export async function disconnect() {
   if (client) {
     try { await client.close(); } catch {}

@@ -2,7 +2,7 @@
  * Core tab management logic.
  * Controls TradingView Desktop tabs via CDP and Electron keyboard shortcuts.
  */
-import { getClient, evaluate } from '../connection.js';
+import { getClient, evaluate, connectTo } from '../connection.js';
 
 const CDP_HOST = 'localhost';
 const CDP_PORT = 9222;
@@ -83,10 +83,8 @@ export async function closeTab() {
 }
 
 /**
- * Switch to a tab by index (visual activation only).
- * KNOWN LIMITATION: does NOT reconnect the cached CDP client — evaluate() calls
- * keep hitting the previously connected target until that connection dies.
- * See CODE_REVIEW_2026-07-07.md finding #6.
+ * Switch to a tab by index: brings it to the front AND rebinds the CDP client
+ * to it, so subsequent evaluate() calls operate on the newly active tab.
  */
 export async function switchTab({ index }) {
   const tabs = await list();
@@ -98,11 +96,16 @@ export async function switchTab({ index }) {
 
   const target = tabs.tabs[idx];
 
-  // Use CDP Target.activateTarget to bring the tab to front
+  // Bring the tab to front, then rebind the cached CDP client to it
   try {
-    const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/activate/${target.id}`);
-    const text = await resp.text();
-    return { success: true, action: 'switched', index: idx, tab_id: target.id, chart_id: target.chart_id };
+    await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/activate/${target.id}`);
+    await connectTo(target.id);
+    const symbol = await evaluate(`
+      (function() {
+        try { return window.TradingViewApi._activeChartWidgetWV.value().symbol(); } catch(e) { return null; }
+      })()
+    `);
+    return { success: true, action: 'switched', index: idx, tab_id: target.id, chart_id: target.chart_id, reconnected: true, active_symbol: symbol };
   } catch (e) {
     throw new Error(`Failed to activate tab ${idx}: ${e.message}`);
   }
