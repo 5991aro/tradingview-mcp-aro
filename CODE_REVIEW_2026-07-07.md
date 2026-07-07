@@ -43,6 +43,16 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 | O2b/O3 | `src/core/alerts.js`, `src/tools/alerts.js` | `greater_than`/`less_than` silently mapped to crossing conditions; payload hardcoded USD/1-min/extended | `greater`/`less` are true static API condition types (live-verified: static alert fires immediately when price already beyond level); currency/session/resolution now read from the active chart when the alert targets its symbol (safe defaults otherwise). End-to-end re-verified via create+delete of a test alert |
 | O1 | `src/core/pine.js`, `src/tools/pine.js` | `pine_open` only injected source into the currently open script — a later save could overwrite a different script | `openScript` now drives TradingView's own "Open script…" dialog (script-title menu → Open script… → **trusted CDP double-click** on the row; synthetic JS clicks are ignored). Verifies the title switched; falls back to legacy facade injection with an explicit `warning` + `method: "facade_fallback"`. Live-verified 2026-07-07 both directions (9 EMA Reclaim Scalp ↔ RVOL and ATR) plus `already_open` path. Discovery notes: Pine editor here runs as a floating `pine-dialog` (position:fixed → `offsetParent` visibility checks give false negatives); open-dialog rows need trusted CDP mouse input |
 
+## E2E baseline (live, 2026-07-07)
+
+`npm test` against the live session: **92/95 pass** (~2 min). The three failures:
+- `tv_launch` binary detection — environment (MSIX/Brave, see Open #9), not code.
+- `ui_open_panel` close — real bug: TradingView removed `hideWidget` from
+  `bottomWidgetBar`; **fixed** with `hide()`/`close()` fallback in `src/core/ui.js`
+  (live-verified: pine-editor open/close both succeed, bottom panel confirmed closed).
+- `replay_stop` — test-order flake: the test calls `goToRealtime` directly after replay
+  already stopped; core guards this correctly (see Open #15).
+
 ## OPEN — for a future session
 
 Ordered by value. Items needing a **live TradingView (CDP)** to verify are marked ⚡.
@@ -64,6 +74,9 @@ Ordered by value. Items needing a **live TradingView (CDP)** to verify are marke
     `target_reached` flag in the result. Add the flag; consider a coarser seek.
 14. **Minor cosmetics:** `xhrEval(path, bodyObj)` has an unused param; `window._xhrPayload`
     global pollution; `symbolSearch` hardcodes `lang: 'en'`.
+15. **`tests/e2e.test.js` replay_stop test is order-dependent** — it calls `goToRealtime`
+    directly even when an earlier test already stopped replay; wrap in an isReplayStarted
+    guard like `src/core/replay.js` does.
 
 ## How to continue
 
