@@ -179,7 +179,7 @@ export function analyze({ source }) {
     success: true,
     issue_count: diagnostics.length,
     diagnostics,
-    note: diagnostics.length === 0 ? 'No static analysis issues found. Use pine_compile or pine_smart_compile for full server-side compilation check.' : undefined,
+    note: diagnostics.length === 0 ? 'No static analysis issues found. Use pine_check or pine_compile for full server-side compilation check.' : undefined,
   };
 }
 
@@ -426,6 +426,10 @@ export async function getConsole() {
   return { success: true, entries: entries || [], entry_count: entries?.length || 0 };
 }
 
+// DEAD CODE: the pine_smart_compile tool is deprecated and returns a warning
+// without calling this (see tools/pine.js). Kept for reference only — do not wire
+// it back up; its internal Save click reloads the last server-saved version and
+// destroys pine_set_source changes.
 export async function smartCompile() {
   const editorReady = await ensurePineEditorOpen();
   if (!editorReady) throw new Error('Could not open Pine Editor.');

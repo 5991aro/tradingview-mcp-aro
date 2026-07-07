@@ -83,7 +83,10 @@ export async function closeTab() {
 }
 
 /**
- * Switch to a tab by index. Reconnects CDP to the new target.
+ * Switch to a tab by index (visual activation only).
+ * KNOWN LIMITATION: does NOT reconnect the cached CDP client — evaluate() calls
+ * keep hitting the previously connected target until that connection dies.
+ * See CODE_REVIEW_2026-07-07.md finding #6.
  */
 export async function switchTab({ index }) {
   const tabs = await list();

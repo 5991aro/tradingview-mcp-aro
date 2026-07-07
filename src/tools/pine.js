@@ -50,7 +50,7 @@ export function registerPineTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('pine_open', 'Open a saved Pine Script by name', {
+  server.tool('pine_open', 'Load a saved Pine Script\'s source into the editor by name. CAVEAT: this injects the saved source into whatever script is currently open in the editor — it does not switch the editor\'s backing script. A subsequent pine_save (Ctrl+S) saves under the CURRENTLY OPEN script\'s identity and can overwrite a different script. Check pine_list_scripts / the editor title if unsure which script is active.', {
     name: z.string().describe('Name of the saved script to open (case-insensitive match)'),
   }, async ({ name }) => {
     try { return jsonResult(await core.openScript({ name })); }

@@ -40,7 +40,10 @@ export async function batchRun({ symbols, timeframes, action, delay_ms, ohlcv_co
           const client = await getClient();
           const { data } = await client.Page.captureScreenshot({ format: 'png' });
           const ts = new Date().toISOString().replace(/[:.]/g, '-');
-          const fname = `batch_${symbol}_${tf || 'default'}_${ts}.png`;
+          // Sanitize: exchange-prefixed symbols like "BATS:TSLA" contain ':', invalid in Windows filenames
+          const safeSymbol = String(symbol).replace(/[^A-Za-z0-9._-]/g, '_');
+          const safeTf = String(tf || 'default').replace(/[^A-Za-z0-9._-]/g, '_');
+          const fname = `batch_${safeSymbol}_${safeTf}_${ts}.png`;
           const filePath = join(SCREENSHOT_DIR, fname);
           writeFileSync(filePath, Buffer.from(data, 'base64'));
           actionResult = { file_path: filePath };

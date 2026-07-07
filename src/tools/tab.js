@@ -18,7 +18,7 @@ export function registerTabTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('tab_switch', 'Switch to a chart tab by index', {
+  server.tool('tab_switch', 'Bring a chart tab to the front by index. CAVEAT: this only activates the tab visually — the CDP connection stays bound to the previously connected chart target, so subsequent tools may still operate on the old tab. Prefer working within one tab per session.', {
     index: z.coerce.number().describe('Tab index (0-based, from tab_list)'),
   }, async ({ index }) => {
     try { return jsonResult(await core.switchTab({ index })); }

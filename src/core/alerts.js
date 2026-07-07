@@ -6,7 +6,12 @@ import { evaluate, evaluateAsync, getClient } from '../connection.js';
 
 const BASE = 'https://pricealerts.tradingview.com';
 
-// Map condition strings to TradingView API condition types
+// Map condition strings to TradingView API condition types.
+// NOTE: greater_than/less_than map to CROSSING conditions — the alert only fires
+// when price crosses the level, not while it is already beyond it. An alert set
+// with greater_than while price is already above the level will NOT fire until
+// price dips below and crosses up again. (True static greater/less conditions
+// have not been verified against the pricealerts API yet — see CODE_REVIEW doc.)
 const CONDITION_MAP = {
   greater_than: 'cross_up',
   less_than:    'cross_down',
@@ -80,6 +85,9 @@ export async function create({ condition, price, message, symbol }) {
     message: payload.message,
     error: result?.errmsg || null,
     source: 'rest_api',
+    note: (condition === 'greater_than' || condition === 'less_than')
+      ? `"${condition}" is implemented as a CROSSING condition (${tvCondition}): it fires when price crosses ${price}, not while price is already beyond it.`
+      : undefined,
   };
 }
 

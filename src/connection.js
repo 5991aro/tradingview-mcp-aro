@@ -61,8 +61,10 @@ export async function connect() {
       return client;
     } catch (err) {
       lastError = err;
-      const delay = Math.min(BASE_DELAY * Math.pow(2, attempt), 30000);
-      await new Promise(r => setTimeout(r, delay));
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = Math.min(BASE_DELAY * Math.pow(2, attempt), 30000);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
   }
   throw new Error(`CDP connection failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
