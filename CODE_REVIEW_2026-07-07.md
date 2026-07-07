@@ -17,6 +17,9 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 - `pine_smart_compile`'s misleading deprecation hint was fixed in the same commit.
 - The richer, project-specific version of the Pine workflow lives in
   `C:\Users\Anwender\OneDrive\Trademaster\.claude\skills\create-indicator\SKILL.md`.
+- After the O1 fix, both that skill and `skills/pine-develop` were updated to check
+  `pine_open`'s `method` field (`ui_open`/`already_open` safe; `facade_fallback` = injection
+  only, do not save blindly).
 
 ## FIXED in this review's commit
 
