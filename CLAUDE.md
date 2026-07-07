@@ -2,6 +2,12 @@
 
 77 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
 
+> **Before any rework or bug-fixing session:** read `CODE_REVIEW_2026-07-07.md` (repo root)
+> first — it records the full 2026-07 review: what was fixed and live-verified, the remaining
+> backlog with priorities, live-DOM discoveries (floating pine-dialog, trusted-click
+> requirement), and how to continue. On this machine TradingView runs as Brave with
+> `--remote-debugging-port=9222` (desktop shortcut "TradingView (CDP)") — `tv_launch` won't work.
+
 ## Decision Tree — Which Tool When
 
 ### "What's on my chart right now?"
