@@ -37,17 +37,13 @@ sensible fallback chains. Findings below, numbered as referenced in code comment
 | O11 | `src/core/index.js` | Public API missing `pane`, `tab`, `morning`, `stream` exports | Added |
 | O12 | `tests/e2e.test.js` | Hard-failed (`process.exit(1)`) without live TradingView, breaking `npm test` offline | Probes CDP up front, skips suite with actionable message — `npm test` now green offline |
 | O4 | `src/connection.js`, `src/core/tab.js`, `src/tools/tab.js` | `tab_switch` was visual-only — cached CDP client stayed bound to the old tab | New `connectTo(targetId)` rebinds the client after activation; result includes `reconnected` + `active_symbol` as proof. Live-verified 2026-07-07 (read `BATS:MU` through the new connection) |
+| O1 | `src/core/pine.js`, `src/tools/pine.js` | `pine_open` only injected source into the currently open script — a later save could overwrite a different script | `openScript` now drives TradingView's own "Open script…" dialog (script-title menu → Open script… → **trusted CDP double-click** on the row; synthetic JS clicks are ignored). Verifies the title switched; falls back to legacy facade injection with an explicit `warning` + `method: "facade_fallback"`. Live-verified 2026-07-07 both directions (9 EMA Reclaim Scalp ↔ RVOL and ATR) plus `already_open` path. Discovery notes: Pine editor here runs as a floating `pine-dialog` (position:fixed → `offsetParent` visibility checks give false negatives); open-dialog rows need trusted CDP mouse input |
 
 ## OPEN — for a future session
 
 Ordered by value. Items needing a **live TradingView (CDP)** to verify are marked ⚡.
 (Numbering preserved from the original review; items 6, 8, 11, 12 were fixed same day — see O-rows above.)
 
-1. ⚡ **`pine_open` doesn't switch the editor's backing script** (`src/core/pine.js` `openScript`).
-   It fetches the saved source via pine-facade and `setValue()`s it into the currently open
-   script. A later Ctrl+S saves under the wrong identity → can silently overwrite a different
-   script. Proper fix: drive TradingView's own "Open script" dialog (Pine Editor → Open menu),
-   or find an internal API that actually switches the script. Documented for now.
 2. ⚡ **(2b) True greater/less alert conditions.** Probe the pricealerts REST API for static
    threshold condition types; if they exist, map `greater_than`/`less_than` to them properly.
 3. ⚡ **`alert_create` hardcodes `currency-id: "USD"`, `resolution: '1'`, `session: "extended"`**

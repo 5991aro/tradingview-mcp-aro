@@ -538,10 +538,121 @@ export async function newScript({ type }) {
   return { success: true, type, action: 'new_script_created', template: typeMap[type] };
 }
 
+/** Read the script title shown in the Pine editor header (null if not found). */
+async function getEditorTitle() {
+  return evaluate(`
+    (function() {
+      var scope = document.querySelector('[data-name="pine-dialog"]') || document;
+      var btns = scope.querySelectorAll('button, [role="button"]');
+      for (var i = 0; i < btns.length; i++) {
+        var tx = (btns[i].textContent || '').trim();
+        if (tx && tx.length > 2 && !/^Line \\d|^\\d+ [∙·]|Version:/.test(tx)) return tx;
+      }
+      return null;
+    })()
+  `);
+}
+
+/**
+ * Truly open a saved script via TradingView's own "Open script…" dialog, so the
+ * editor's BACKING SCRIPT switches (a later save goes to the right identity).
+ * Requires trusted CDP mouse input — synthetic JS clicks on the dialog rows are
+ * ignored by TradingView. Verified live 2026-07-07.
+ */
+async function openScriptViaUi({ name }) {
+  const { mouseClick } = await import('./ui.js');
+  const target = name.toLowerCase();
+
+  const currentTitle = await getEditorTitle();
+  if (currentTitle && currentTitle.toLowerCase() === target) {
+    return { success: true, name: currentTitle, method: 'already_open', opened: true };
+  }
+  if (!currentTitle) throw new Error('Could not read the current script title from the Pine editor header.');
+
+  // 1. Open the script menu (click the title button)
+  const menuOpened = await evaluate(`
+    (function() {
+      var scope = document.querySelector('[data-name="pine-dialog"]') || document;
+      var btns = scope.querySelectorAll('button, [role="button"]');
+      for (var i = 0; i < btns.length; i++) {
+        if ((btns[i].textContent || '').trim() === ${JSON.stringify(currentTitle)}) { btns[i].click(); return true; }
+      }
+      return false;
+    })()
+  `);
+  if (!menuOpened) throw new Error('Could not open the script menu (title button not found).');
+  await new Promise(r => setTimeout(r, 700));
+
+  // 2. Click "Open script…" (Ctrl+O entry)
+  const openClicked = await evaluate(`
+    (function() {
+      var items = document.querySelectorAll('[role="menuitem"], [class*="menuBox"] [class*="item"]');
+      for (var i = 0; i < items.length; i++) {
+        if (/^Open script/i.test((items[i].textContent || '').trim())) { items[i].click(); return true; }
+      }
+      return false;
+    })()
+  `);
+  if (!openClicked) throw new Error('"Open script…" menu entry not found (menu may not have opened, or non-English UI).');
+  await new Promise(r => setTimeout(r, 1200));
+
+  // 3. Locate the target row in the open-script dialog
+  const row = await evaluate(`
+    (function() {
+      var target = ${JSON.stringify(target)};
+      var rows = document.querySelectorAll('[role="dialog"] [class*="row"], [role="dialog"] [class*="item"]');
+      var match = null, fallback = null, names = [];
+      for (var i = 0; i < rows.length; i++) {
+        var tx = (rows[i].textContent || '').trim();
+        if (!tx) continue;
+        var lower = tx.toLowerCase();
+        names.push(tx.substring(0, 50));
+        if (!match && lower.indexOf(target) === 0) match = rows[i];
+        if (!fallback && lower.indexOf(target) !== -1) fallback = rows[i];
+      }
+      var el = match || fallback;
+      if (!el) return { found: false, available: names.slice(0, 20) };
+      var r = el.getBoundingClientRect();
+      return { found: true, label: el.textContent.trim().substring(0, 60), x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    })()
+  `);
+  if (!row?.found) {
+    // Close the dialog before failing so the editor isn't left blocked
+    await evaluate(`(function(){ var e = new KeyboardEvent('keydown', {key:'Escape',bubbles:true}); document.dispatchEvent(e); })()`).catch(() => {});
+    throw new Error(`Script "${name}" not found in the Open dialog. Available: ${(row?.available || []).join(' | ')}`);
+  }
+
+  // 4. Trusted CDP double-click on the row (synthetic clicks are ignored)
+  await mouseClick({ x: row.x, y: row.y, button: 'left', double_click: true });
+  await new Promise(r => setTimeout(r, 2500));
+
+  // 5. Verify the backing script actually switched
+  const newTitle = await getEditorTitle();
+  if (!newTitle || newTitle === currentTitle) {
+    throw new Error(`Open dialog interaction did not switch the script (title still "${newTitle}").`);
+  }
+  return { success: true, name: newTitle, method: 'ui_open', opened: true };
+}
+
 export async function openScript({ name }) {
   const editorReady = await ensurePineEditorOpen();
   if (!editorReady) throw new Error('Could not open Pine Editor.');
 
+  // Preferred path: TradingView's own Open dialog — switches the editor's
+  // backing script, so a later pine_save goes to the correct identity.
+  try {
+    return await openScriptViaUi({ name });
+  } catch (uiErr) {
+    // Fallback: legacy pine-facade source injection. WARNING: this does NOT
+    // switch the backing script — a later save writes to the currently open one.
+    const legacy = await openScriptViaFacade({ name });
+    legacy.method = 'facade_fallback';
+    legacy.warning = `UI open failed (${uiErr.message}) — source was INJECTED into the currently open script "${await getEditorTitle().catch(() => 'unknown')}". A pine_save now would overwrite that script. Verify before saving.`;
+    return legacy;
+  }
+}
+
+async function openScriptViaFacade({ name }) {
   const escapedName = JSON.stringify(name.toLowerCase());
 
   const result = await evaluateAsync(`
