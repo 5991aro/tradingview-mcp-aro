@@ -35,11 +35,11 @@ export function registerPineTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('pine_smart_compile', '⚠️ DEPRECATED — use pine_set_source + ui_keyboard(Ctrl+S) instead. This function clicks "Save" internally which reloads the last server-saved version, destroying any changes made via pine_set_source.', {}, async () => {
+  server.tool('pine_smart_compile', '⚠️ DEPRECATED — use pine_set_source → pine_save → pine_compile instead. This function clicks "Save" internally which reloads the last server-saved version, destroying any changes made via pine_set_source. Note: saving alone does not update the on-chart instance — pine_compile (Ctrl+Enter) is what applies the code to the chart.', {}, async () => {
     return jsonResult({
       success: false,
       deprecated: true,
-      warning: 'pine_smart_compile is unsafe: it triggers an internal Save that reloads the old server version, overwriting any pine_set_source changes. Use this sequence instead: pine_set_source → ui_keyboard(key="s", modifiers=["ctrl"]) → pine_get_errors.',
+      warning: 'pine_smart_compile is unsafe: it triggers an internal Save that reloads the old server version, overwriting any pine_set_source changes. Use this sequence instead: pine_set_source → pine_save → pine_compile → pine_get_errors. (Saving alone does not update the on-chart instance; pine_compile / Ctrl+Enter is what applies it.)',
     });
   });
 

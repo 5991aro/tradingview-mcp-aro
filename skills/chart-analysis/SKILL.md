@@ -33,6 +33,10 @@ After adding, use `indicator_set_inputs` to customize settings (e.g., change EMA
 - `chart_set_visible_range` — zoom to a specific date window
 - `chart_get_visible_range` — check what's currently visible
 
+Caution: do NOT feed timestamps from `data_get_ohlcv` into `chart_set_visible_range` — the two
+use different, offset timestamp bases and the result is unreliable. To land on a specific bar,
+use `chart_scroll_to_date` with a plain date instead.
+
 ## Step 4: Annotate
 
 Use drawing tools to mark up the chart:
