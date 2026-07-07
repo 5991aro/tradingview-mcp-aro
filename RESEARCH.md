@@ -44,7 +44,7 @@ When an agent monitors multiple symbols simultaneously (via `pane_set_layout` + 
 
 ### 7. Pine Script as Agent Output
 
-Can an LLM agent write, debug, and iterate on Pine Script effectively? Pine Script is a domain-specific language with unusual constraints (series types, historical referencing, repainting). The compile-error-fix loop (`pine_set_source` → `pine_smart_compile` → `pine_get_errors`) tests whether agents can handle DSL-specific debugging.
+Can an LLM agent write, debug, and iterate on Pine Script effectively? Pine Script is a domain-specific language with unusual constraints (series types, historical referencing, repainting). The compile-error-fix loop (`pine_set_source` → `pine_save` → `pine_compile` → `pine_get_errors`) tests whether agents can handle DSL-specific debugging.
 
 ## Findings So Far
 
@@ -54,7 +54,7 @@ The most impactful design decision was making all tools return compact output by
 
 ### Tool Count Does Not Confuse the Agent
 
-78 tools seems excessive, but with clear MCP server instructions and a `CLAUDE.md` decision tree, Claude consistently selects the right tools. The key is descriptive tool names and the instruction block — not reducing tool count.
+77 tools seems excessive, but with clear MCP server instructions and a `CLAUDE.md` decision tree, Claude consistently selects the right tools. The key is descriptive tool names and the instruction block — not reducing tool count.
 
 ### Pine Script Development is the Strongest Use Case
 

@@ -43,13 +43,14 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 
 ### "Work on Pine Script"
 1. `pine_set_source` → inject code into editor
-2. `pine_smart_compile` → compile with auto-detection + error check
-3. `pine_get_errors` → read compilation errors
-4. `pine_get_console` → read log.info() output
-5. `pine_get_source` → read current code back (WARNING: can be very large for complex scripts)
-6. `pine_save` → save to TradingView cloud
+2. `pine_save` → save (saving alone does NOT update the on-chart instance)
+3. `pine_compile` → compile + apply to chart
+4. `pine_get_errors` → read compilation errors
+(NEVER use `pine_smart_compile` — deprecated, destroys pine_set_source changes)
+5. `pine_get_console` → read log.info() output
+6. `pine_get_source` → read current code back (WARNING: can be very large for complex scripts)
 7. `pine_new` → create blank indicator/strategy/library
-8. `pine_open` → load a saved script by name
+8. `pine_open` → open a saved script by name. Check result `method`: `ui_open`/`already_open` = backing script truly switched (safe to save); `facade_fallback` = source only injected — a save would overwrite the currently open script
 
 ### "Practice trading with replay"
 1. `replay_start` with `date: "2025-03-01"` → enter replay mode
@@ -71,7 +72,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `draw_clear` → remove all
 
 ### "Manage alerts"
-- `alert_create` → set price alert (condition: "crossing", "greater_than", "less_than")
+- `alert_create` → set price alert. Conditions: "greater_than"/"less_than" are static (fire immediately if price already beyond level), "crossing"/"cross_up"/"cross_down" fire on cross. Currency/session/resolution come from the active chart
 - `alert_list` → view active alerts
 - `alert_delete` → remove alerts
 
@@ -145,7 +146,7 @@ ui_evaluate({
 `chart_manage_indicator` ignores color overrides and no `setStudyOverrides` method is exposed. Workaround: hardcode colors in the Pine Script source (`color=color.yellow`, `color=#FF0000`, etc.) before compiling.
 
 ### Pine Editor opens in split-view (hides charts)
-`ui_open_panel("pine-editor")` may open the editor as a right-side split that hijacks a chart pane. The code now attempts to click the bottom toolbar tab first (which opens in the bottom strip), but if split-view still occurs, close the editor with `ui_open_panel("pine-editor", "close")` — the close function now tries `Alt+P` as a keyboard fallback if `hideWidget` fails.
+`ui_open_panel("pine-editor")` may open the editor as a right-side split that hijacks a chart pane. The code now attempts to click the bottom toolbar tab first (which opens in the bottom strip), but if split-view still occurs, close the editor with `ui_open_panel("pine-editor", "close")` — the close function falls back to `hide()`/`close()` (TradingView removed `hideWidget` in 2026) and then `Alt+P` as a keyboard fallback.
 
 ## Architecture
 

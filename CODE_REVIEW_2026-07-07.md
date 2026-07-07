@@ -1,5 +1,10 @@
 # Code Review — 2026-07-07
 
+**STATUS (2026-07-08): review complete.** All critical and live-verifiable findings are fixed
+and verified (18 fixes total, incl. pine_open, tab_switch, alert semantics, hideWidget);
+e2e baseline 92/95. Remaining OPEN items are polish only — no urgency. Docs (README,
+CLAUDE.md, RESEARCH.md) and both skills are synced with the new behavior.
+
 Full review of `src/` (~4,700 lines) and tests, performed with Claude Code (Fable 5).
 Scope: (1) core CDP plumbing, (2) trap-prone tools (pine/replay/alerts), (3) everything else.
 Tests at review time: **16/17 pass** (only `e2e.test.js` failed — required a live TradingView

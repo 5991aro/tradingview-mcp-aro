@@ -117,7 +117,9 @@ Only after the screenshot/values confirm the change: report done, listing any
 `alertcondition()` titles so the user knows which alerts they can create. If they don't
 confirm it, say exactly what you see instead — do not soften it.
 
-Alert creation caveat: `alert_create` only handles price-level alerts. Indicator alerts must
+Alert creation caveat: `alert_create` only handles price-level alerts (`greater_than`/
+`less_than` are static — fire immediately if price is already beyond the level;
+`crossing`/`cross_up`/`cross_down` fire on cross). Indicator alerts must
 be created through TradingView's own dialog (chart focus → Alt+A → select indicator → select
 the alertcondition title → Create); a wrongly created alert shows `"Crossing <price>"` with a
 frozen `"value"` in `alert_list` — delete it (`alert_delete` works reliably) and recreate.

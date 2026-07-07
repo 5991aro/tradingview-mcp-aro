@@ -177,7 +177,7 @@ Claude reads `CLAUDE.md` automatically when working in this project. It contains
 | "What's on my chart?" | `chart_get_state` → `data_get_study_values` → `quote_get` |
 | "Give me a full analysis" | `quote_get` → `data_get_study_values` → `data_get_pine_lines` → `data_get_pine_labels` → `capture_screenshot` |
 | "Switch to BTCUSD daily" | `chart_set_symbol` → `chart_set_timeframe` |
-| "Write a Pine Script for..." | `pine_set_source` → `pine_smart_compile` → `pine_get_errors` |
+| "Write a Pine Script for..." | `pine_set_source` → `pine_save` → `pine_compile` → `pine_get_errors` |
 | "Start replay at March 1st" | `replay_start` → `replay_step` → `replay_trade` |
 | "Set up a 4-chart grid" | `pane_set_layout` → `pane_set_symbol` |
 | "Draw a level at 94200" | `draw_shape` (horizontal_line) |
@@ -232,10 +232,11 @@ Read `line.new()`, `label.new()`, `table.new()`, `box.new()` output from any vis
 | Tool | Step |
 |------|------|
 | `pine_set_source` | 1. Inject code into editor |
-| `pine_smart_compile` | 2. Compile with auto-detection + error check |
-| `pine_get_errors` | 3. Read compilation errors if any |
-| `pine_get_console` | 4. Read log.info() output |
-| `pine_save` | 5. Save to TradingView cloud |
+| `pine_save` | 2. Save to TradingView cloud (saving alone does NOT apply to the chart) |
+| `pine_compile` | 3. Compile + apply to chart |
+| `pine_get_errors` | 4. Read compilation errors if any |
+| `pine_get_console` | 5. Read log.info() output |
+| ~~`pine_smart_compile`~~ | DEPRECATED — destroys pine_set_source changes; do not use |
 | `pine_analyze` | Offline static analysis (no chart needed) |
 | `pine_check` | Server-side compile check (no chart needed) |
 
